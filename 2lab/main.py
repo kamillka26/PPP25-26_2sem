@@ -3,7 +3,7 @@ import itertools
 import functools
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
-from typing import Iterable, Tuple, Callable, Iterator, List, Optional
+from typing import Iterable, Tuple, Callable, Iterator
 
 Point = Tuple[float, float]
 Polygon = Tuple[Point, ...]
@@ -36,7 +36,6 @@ def draw_polygons(polygon_iter, title = "", count = None,
     ax.set_title(title, fontsize=12)
 
     if show_axes:
-  
         ax.spines['left'].set_position('zero')
         ax.spines['bottom'].set_position('zero')
         ax.spines['left'].set_color('gray')
@@ -134,7 +133,6 @@ def gen_triangle(base = 1.2, height= 1.0):
         yield ((x0, 0.0), (x0 + base, 0.0), (x0 + base/2, height))
 
 def gen_hexagon(r = 0.7):
-
     angles = [i * math.pi/3 for i in range(6)]
     for k in gen_zigzag_indices():
         cx = 2 * r * k
@@ -194,58 +192,54 @@ def flt_short_side(max_len):
 def flt_point_inside(point):
     return lambda poly: is_convex(poly) and point_inside_convex(point, poly)
 
-def flt_decorator(filter_func):
+def flt_angle_point(point):
+    def _filter(poly):
+        eps = 1e-9
+        return any(abs(x - point[0]) < eps and abs(y - point[1]) < eps for x, y in poly)
+    return _filter
+
+def flt_polygon_angles_inside(other_poly):
+    def _filter(poly):
+        if not is_convex(poly):
+            return False
+        return any(point_inside_convex(v, poly) for v in other_poly)
+    return _filter
+
+def filtering_decorator(filter_func):
     def decorator(func):
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
-            if args and isinstance(args[0], (Iterator, Iterable)):
-                filtered_iter = filter(filter_func, args[0])
-                return func(filtered_iter, *args[1:], **kwargs)
-            return func(*args, **kwargs)
+            if not args:
+                raise TypeError("Функция должна принимать итератор первым аргументом")
+            iterable = args[0]
+            filtered_iter = filter(filter_func, iterable)
+            return func(filtered_iter, *args[1:], **kwargs)
         return wrapper
     return decorator
 
-def tr_decorator(transform_func):
+def transforming_decorator(transform_func):
     def decorator(func):
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
-            if args and isinstance(args[0], (Iterator, Iterable)):
-                transformed_iter = map(transform_func, args[0])
-                return func(transformed_iter, *args[1:], **kwargs)
-            return func(*args, **kwargs)
+            if not args:
+                raise TypeError("Функция должна принимать итератор первым аргументом")
+            iterable = args[0]
+            transformed_iter = map(transform_func, iterable)
+            return func(transformed_iter, *args[1:], **kwargs)
         return wrapper
     return decorator
 
-@flt_decorator(lambda: flt_convex_polygon)
-def flt_convex_polygon_decorator(func):
-    return func
+flt_convex_polygon_decorator = filtering_decorator(flt_convex_polygon)
+flt_angle_point_decorator = lambda point: filtering_decorator(flt_angle_point(point))
+flt_square_decorator = lambda max_area: filtering_decorator(flt_square(max_area))
+flt_short_side_decorator = lambda max_len: filtering_decorator(flt_short_side(max_len))
+flt_point_inside_decorator = lambda point: filtering_decorator(flt_point_inside(point))
+flt_polygon_angles_inside_decorator = lambda other_poly: filtering_decorator(flt_polygon_angles_inside(other_poly))
 
-def flt_angle_point_decorator(point):
-    return flt_decorator(lambda: flt_angle_point(point))
-
-def flt_square_decorator(max_area):
-    return flt_decorator(lambda: flt_square(max_area))
-
-def flt_short_side_decorator(max_len):
-    return flt_decorator(lambda: flt_short_side(max_len))
-
-def flt_point_inside_decorator(point):
-    return flt_decorator(lambda: flt_point_inside(point))
-
-def flt_polygon_angles_inside_decorator(other_poly):
-    return flt_decorator(lambda: flt_polygon_angles_inside(other_poly))
-
-def tr_translate_decorator(dx, dy):
-    return tr_decorator(lambda: tr_translate(dx, dy))
-
-def tr_rotate_decorator(angle, cx=0.0, cy=0.0):
-    return tr_decorator(lambda: tr_rotate(angle, cx, cy))
-
-def tr_symmetry_decorator(p1, p2):
-    return tr_decorator(lambda: tr_symmetry(p1, p2))
-
-def tr_homothety_decorator(scale, cx=0.0, cy=0.0):
-    return tr_decorator(lambda: tr_homothety(scale, cx, cy))
+tr_translate_decorator = lambda dx, dy: transforming_decorator(tr_translate(dx, dy))
+tr_rotate_decorator = lambda angle, cx=0.0, cy=0.0: transforming_decorator(tr_rotate(angle, cx, cy))
+tr_symmetry_decorator = lambda p1, p2: transforming_decorator(tr_symmetry(p1, p2))
+tr_homothety_decorator = lambda scale, cx=0.0, cy=0.0: transforming_decorator(tr_homothety(scale, cx, cy))
 
 def agr_max_side(poly_iter):
     return functools.reduce(lambda max_val, poly: max(max_val, max(side_lengths(poly))), poly_iter, 0.0)
@@ -271,7 +265,6 @@ def zip_polygons(*iterators):
         yield functools.reduce(lambda a, b: a + b, polys)
 
 if __name__ == "__main__":
-
     rect_stream = gen_rectangle(w=1.2, h=0.8, gap=0.2)
     draw_polygons(rect_stream, title="а) Последовательность прямоугольников ", count=7)
 
@@ -316,11 +309,11 @@ if __name__ == "__main__":
         quads.append(make_quad_at_distance(-d, size_factor=0.3))  
 
     fig, ax = plt.subplots(figsize=(8, 8))
-    draw_polygons(iter(quads), title="Четырёхугольники вдоль y=x, от центра к краям",
+    draw_polygons(iter(quads), title="Четырёхугольники вдоль y=x",
                   show_axes=True, ax=ax)
 
     x_vals = [-3.5, -2.5, -1.5, -0.5, 0.5, 1.5, 2.5, 3.5]
-    ax.plot(x_vals, x_vals, 'r--', linewidth=1, alpha=0.7, label='y = x')
+    ax.plot(x_vals, x_vals, 'r--', linewidth=1, alpha=0.7)
     ax.legend()
     plt.show()
 
@@ -365,8 +358,7 @@ if __name__ == "__main__":
     draw_polygons(iter(short_side_polys), title=f"Короткая сторона < {max_len}", show_axes=True, ax=axes[1])
     plt.tight_layout()
     plt.show()
-
-
+  
     test_point = (0.6, 0.6)
     polygons_point = [
         ((0,0), (1,0), (1,1), (0,1)),        
@@ -387,30 +379,15 @@ if __name__ == "__main__":
     plt.tight_layout()
     plt.show()
 
-    def flt_angle_point(point):
-   
-      def _filter(poly):
-        return any(abs(x - point[0]) < 1e-9 and abs(y - point[1]) < 1e-9 for x, y in poly)
-      return _filter
-
-    def flt_polygon_angles_inside(other_poly):
-        def _filter(poly):
-            if not is_convex(poly):
-                return False
-            return any(point_inside_convex(v, poly) for v in other_poly)
-        return _filter
-    has_origin = list(filter(flt_angle_point((0,0)), test_polys))
-    print(f"5. Имеют вершину (0,0): {len(has_origin)} фигур")
-
-    convex = list(filter(flt_convex_polygon, test_polys))
-    small_area = list(filter(flt_square(2.0), test_polys))
-    short_side = list(filter(flt_short_side(0.8), test_polys))
-    inside = list(filter(flt_point_inside((1,1)), test_polys))
-    has_origin = list(filter(flt_angle_point((0,0)), test_polys))
+    convex = list(filter(flt_convex_polygon, polygons_mixed))
+    small_area = list(filter(flt_square(2.0), polygons_mixed))
+    short_side = list(filter(flt_short_side(0.8), polygons_mixed))
+    has_origin = list(filter(flt_angle_point((0,0)), polygons_mixed))
+    inside = list(filter(flt_point_inside((1,1)), polygons_mixed))
     outer_square = ((0,0),(3,0),(3,3),(0,3))
-    contains_vertex = list(filter(flt_polygon_angles_inside(outer_square), test_polys))
+    contains_vertex = list(filter(flt_polygon_angles_inside(outer_square), polygons_mixed))
 
-    print(f"1. Выпуклые: {len(convex)} из {len(test_polys)}")
+    print(f"1. Выпуклые: {len(convex)} из {len(polygons_mixed)}")
     print(f"2. Площадь < 2.0: {len(small_area)} фигур")
     print(f"3. Короткая сторона < 0.8: {len(short_side)} фигур")
     print(f"4. Содержат точку (1,1): {len(inside)} фигур")
@@ -420,12 +397,12 @@ if __name__ == "__main__":
 
     fig, axes = plt.subplots(2, 3, figsize=(15, 10))
     filters_data = [
-        ("Выпуклые", convex, test_polys),
-        ("Площадь < 2.0", small_area, test_polys),
-        ("Короткая сторона < 0.8", short_side, test_polys),
-        ("Содержат (1,1)", inside, test_polys),
-        ("Имеют вершину (0,0)", has_origin, test_polys),
-        ("Содержат вершины квадрата", contains_vertex, test_polys)
+        ("Выпуклые", convex, polygons_mixed),
+        ("Площадь < 2.0", small_area, polygons_mixed),
+        ("Короткая сторона < 0.8", short_side, polygons_mixed),
+        ("Содержат (1,1)", inside, polygons_mixed),
+        ("Имеют вершину (0,0)", has_origin, polygons_mixed),
+        ("Содержат вершины квадрата", contains_vertex, polygons_mixed)
     ]
     colors = ['blue', 'green', 'red', 'purple', 'orange', 'brown']
     for idx, (title, filtered, original) in enumerate(filters_data):
@@ -443,16 +420,6 @@ if __name__ == "__main__":
     plt.tight_layout()
     plt.show()
 
-    print("Декоратор @keep_convex")
-    test_polys = [((0,0),(1,0),(1,1),(0,1)), ((0,0),(1,1),(2,0),(1,-1))]
-    convex_list = keep_convex(iter(test_polys))
-    print(f"Выпуклые: {convex_list}")
-
-    print("Декоратор @double_scale")
-    original = [((0,0),(1,0),(0,1))]
-    scaled = double_scale(iter(original))
-    print(f"Увеличенные: {list(scaled)}")
-
     print("\nАгрегирующие функции\n")
 
     demo_polys = [
@@ -468,6 +435,103 @@ if __name__ == "__main__":
     print(f"Минимальная площадь: {agr_min_area(iter(demo_polys)):.3f}")
     print(f"Суммарный периметр: {agr_perimeter(iter(demo_polys)):.3f}")
     print(f"Суммарная площадь: {agr_area(iter(demo_polys)):.3f}")
+
+    def collect(poly_iter):
+        return list(poly_iter)
+
+    demo_polys = [
+        ((0,0), (2,0), (2,2), (0,2)),         
+        ((0,0), (1,0), (1,1), (0,1)),          
+        ((0,0), (3,0), (1.5,2)),              
+        ((0,0), (2,0), (1,1), (2,2), (0,2)),  
+        ((0,0), (2,0), (2,1), (1,1), (0,1))   
+    ]
+    print("\nИсходные полигоны для фильтрации:")
+    for i, p in enumerate(demo_polys):
+        print(f"  {i}: {p}")
+    
+    @flt_convex_polygon_decorator
+    def get_convex(poly_iter):
+        return list(poly_iter)
+    convex = get_convex(iter(demo_polys))
+    print(f"\n1. @flt_convex_polygon_decorator -> оставлены выпуклые: {len(convex)} шт. Индексы: {[demo_polys.index(p) for p in convex]}")
+
+    @flt_angle_point_decorator((0,0))
+    def has_origin(poly_iter):
+        return list(poly_iter)
+    origin_polys = has_origin(iter(demo_polys))
+    print(f"2. @flt_angle_point_decorator((0,0)) -> имеют вершину (0,0): {len(origin_polys)} шт. Индексы: {[demo_polys.index(p) for p in origin_polys]}")
+
+    @flt_square_decorator(2.0)
+    def small_area(poly_iter):
+        return list(poly_iter)
+    area_polys = small_area(iter(demo_polys))
+    print(f"3. @flt_square_decorator(2.0) -> площадь < 2: {len(area_polys)} шт. Индексы: {[demo_polys.index(p) for p in area_polys]}")
+
+    @flt_short_side_decorator(0.8)
+    def short_side(poly_iter):
+        return list(poly_iter)
+    short_polys = short_side(iter(demo_polys))
+    print(f"4. @flt_short_side_decorator(0.8) -> короткая сторона < 0.8: {len(short_polys)} шт. Индексы: {[demo_polys.index(p) for p in short_polys]}")
+
+    @flt_point_inside_decorator((1,1))
+    def contains_point(poly_iter):
+        return list(poly_iter)
+    point_polys = contains_point(iter(demo_polys))
+    print(f"5. @flt_point_inside_decorator((1,1)) -> содержат (1,1): {len(point_polys)} шт. Индексы: {[demo_polys.index(p) for p in point_polys]}")
+
+    @flt_polygon_angles_inside_decorator(((0,0),(3,0),(3,3),(0,3)))
+    def contains_vertex(poly_iter):
+        return list(poly_iter)
+    vertex_polys = contains_vertex(iter(demo_polys))
+    print(f"6. @flt_polygon_angles_inside_decorator(внешний квадрат) -> содержат его вершины: {len(vertex_polys)} шт. Индексы: {[demo_polys.index(p) for p in vertex_polys]}")
+    source_tri = ((0,0), (2,0), (1,1.5))
+    print(f"\nИсходный полигон для трансформаций: {source_tri}")
+
+    @tr_translate_decorator(1, -1)
+    def translate(poly_iter):
+        return list(poly_iter)
+    translated = translate(iter([source_tri]))[0]
+    print(f"7. @tr_translate_decorator(1, -1) -> {translated}")
+
+    @tr_rotate_decorator(math.radians(45))
+    def rotate(poly_iter):
+        return list(poly_iter)
+    rotated = rotate(iter([source_tri]))[0]
+    print(f"8. @tr_rotate_decorator(45°) -> {rotated}")
+
+    @tr_symmetry_decorator((0,0), (1,0))
+    def symmetry(poly_iter):
+        return list(poly_iter)
+    sym = symmetry(iter([source_tri]))[0]
+    print(f"9. @tr_symmetry_decorator(ось X) -> {sym}")
+
+    @tr_homothety_decorator(1.5)
+    def homothety(poly_iter):
+        return list(poly_iter)
+    hom = homothety(iter([source_tri]))[0]
+    print(f"10. @tr_homothety_decorator(1.5) -> {hom}")
+
+    fig, axes = plt.subplots(2, 2, figsize=(10, 8))
+    transforms = [
+        ("трансляция (1,-1)", source_tri, translated),
+        ("ротация 45°", source_tri, rotated),
+        ("симметрия (ось X)", source_tri, sym),
+        ("увеличение 1.5", source_tri, hom)
+    ]
+    for i, (title, orig, trans) in enumerate(transforms):
+        ax = axes[i//2, i%2]
+        ax.add_patch(patches.Polygon(orig, closed=True, fill=False, edgecolor='blue', lw=2, label='исходный'))
+        ax.add_patch(patches.Polygon(trans, closed=True, fill=False, edgecolor='red', lw=2, label='преобразованный'))
+        ax.set_title(title)
+        ax.set_aspect('equal')
+        ax.set_xlim(-2, 3)
+        ax.set_ylim(-2, 3)
+        ax.axhline(0, color='gray', lw=0.5)
+        ax.axvline(0, color='gray', lw=0.5)
+        ax.legend()
+    plt.tight_layout()
+    plt.show()
 
     areas = [polygon_area(p) for p in demo_polys]
     perimeters = [polygon_perimeter(p) for p in demo_polys]
