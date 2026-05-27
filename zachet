@@ -1,0 +1,119 @@
+def print_board(board):
+    size = len(board)
+    print("\n  " + " ".join(str(i) for i in range(size)))
+    for i in range(size):
+        print(f"{i} " + " ".join(board[i]))
+
+def check_win(board, symbol):
+    size = len(board)
+
+    for i in range(size):
+        row_win = all(board[i][j] == symbol for j in range(size))
+        col_win = all(board[j][i] == symbol for j in range(size))
+        if row_win or col_win:
+            return True
+
+    main_diag = all(board[i][i] == symbol for i in range(size))
+    if main_diag:
+        return True
+
+    secondary_diag = all(board[i][size - 1 - i] == symbol for i in range(size))
+    if secondary_diag:
+        return True
+
+    return False
+
+def check_draw(board):
+    size = len(board)
+    return all(board[i][j] != " " for i in range(size) for j in range(size))
+
+def make_move(board, row, col, symbol):
+    if 0 <= row < len(board) and 0 <= col < len(board) and board[row][col] == " ":
+        board[row][col] = symbol
+        return True
+    return False
+
+def choose_board_size():
+    while True:
+        try:
+            size = int(input("Выберите размер поля (3 или 4): "))
+            if size in [3, 4]:
+                return size
+            else:
+                print("Ошибка: введите 3 или 4.")
+        except ValueError:
+            print("Ошибка: введите число 3 или 4.")
+
+def get_player_move(board, player_name, player_symbol):
+    while True:
+        try:
+            move = input(f"{player_name} ({player_symbol}), ваш ход (строка столбец): ").strip()
+            if move.lower() == "restart":
+                return "restart"
+            if move.lower() == "exit":
+                return "exit"
+
+            row, col = map(int, move.split())
+            if make_move(board, row, col, player_symbol):
+                return (row, col)
+            else:
+                print("Ошибка: клетка занята или координаты вне поля. Попробуйте снова.")
+        except ValueError:
+            print("Ошибка: введите два целых числа через пробел (строка и столбец).")
+        except:
+            print("Ошибка ввода. Попробуйте снова.")
+
+def play_game(board_size):
+    board = [[" " for _ in range(board_size)] for _ in range(board_size)]
+    players = [("Игрок 1", "X"), ("Игрок 2", "O")]
+    turn = 0
+
+    while True:
+        print_board(board)
+        player_name, player_symbol = players[turn % 2]
+        result = get_player_move(board, player_name, player_symbol)
+
+        if result == "restart":
+            return "restart"
+        if result == "exit":
+            return "exit"
+
+        if check_win(board, player_symbol):
+            print_board(board)
+            print(f"\nПоздравляем! {player_name} ({player_symbol}) победил!")
+            return "win"
+
+        if check_draw(board):
+            print_board(board)
+            print("\nНичья! Все клетки заполнены.")
+            return "draw"
+
+        turn += 1
+
+def main():
+    print("  Добро пожаловать в Крестики-нолики!")
+    print("Команды: start — начать игру, exit — выйти")
+    print("В процессе игры: координаты (строка столбец), restart — перезапустить, exit — выйти")
+
+    while True:
+        command = input("\nВведите команду (start/exit): ").strip().lower()
+
+        if command == "exit":
+            print("До свидания!")
+            break
+
+        if command == "start":
+            board_size = choose_board_size()
+            result = play_game(board_size)
+
+            if result == "exit":
+                print("До свидания!")
+                break
+            print("\n Начать новую игру?")
+            continue
+
+        else:
+            print("Неизвестная команда. Используйте 'start' или 'exit'.")
+
+if __name__ == "__main__":
+    main()
